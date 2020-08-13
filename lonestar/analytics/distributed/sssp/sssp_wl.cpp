@@ -290,6 +290,10 @@ struct SSSP {
   void operator()(const UpdateRequest& item, UC& ctx) const {
     NodeData& snode = graph->getData(item.src);
 
+    if (snode.dist_current < item.dist) {
+      return;
+    }
+
     if (snode.dist_old > snode.dist_current) {
       active_vertices += 1;
 
