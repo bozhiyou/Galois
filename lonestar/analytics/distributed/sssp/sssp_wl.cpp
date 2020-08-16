@@ -58,6 +58,12 @@ static cll::opt<uint32_t>
           cll::desc("Shift value for the delta step (default value 0)"),
           cll::init(0));
 
+static cll::opt<uint32_t> lambda(
+    "lambda",
+    cll::desc(
+        "Priority bins processed between synchronizations (default value 1)"),
+    cll::init(1));
+
 enum Exec { Sync, Async };
 
 static cll::opt<Exec> execution(
@@ -249,7 +255,7 @@ struct SSSP {
     do {
 
       // if (work_edges.reduce() == 0)
-      priority += (1 << delta);
+      priority += (lambda << delta);
 
       syncSubstrate->set_num_round(_num_iterations);
       dga.reset();
