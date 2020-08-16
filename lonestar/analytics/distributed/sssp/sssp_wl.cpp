@@ -208,6 +208,7 @@ template <bool async>
 struct SSSP {
   uint32_t local_priority;
   Graph* graph;
+  galois::InsertBag<UpdateRequest>& nextBag;
   ReqPushWrap pushWrap;
   using DGTerminatorDetector =
       typename std::conditional<async, galois::DGTerminator<unsigned int>,
@@ -219,12 +220,13 @@ struct SSSP {
   DGAccumulatorTy& BadWork;
   DGAccumulatorTy& WLEmptyWork;
 
-  SSSP(uint32_t _local_priority, Graph* _graph, const ReqPushWrap& _pushWrap,
+  SSSP(uint32_t _local_priority, Graph* _graph,
+       galois::InsertBag<UpdateRequest>& _nextBag, const ReqPushWrap& _pushWrap,
        DGTerminatorDetector& _dga, DGAccumulatorTy& _work_edges,
        DGAccumulatorTy& _BadWork, DGAccumulatorTy& _WLEmptyWork)
-      : local_priority(_local_priority), graph(_graph), pushWrap(_pushWrap),
-        active_vertices(_dga), work_edges(_work_edges), BadWork(_BadWork),
-        WLEmptyWork(_WLEmptyWork) {}
+      : local_priority(_local_priority), graph(_graph), nextBag(_nextBag),
+        pushWrap(_pushWrap), active_vertices(_dga), work_edges(_work_edges),
+        BadWork(_BadWork), WLEmptyWork(_WLEmptyWork) {}
 
   void static go(Graph& _graph, galois::InsertBag<UpdateRequest>& initBag) {
     FirstItr_SSSP<async>::go(_graph, initBag);
@@ -235,10 +237,10 @@ struct SSSP {
         _graph.allNodesWithEdgesRange();
 
     uint32_t priority;
-    if (delta == 0)
-      priority = std::numeric_limits<uint32_t>::max();
-    else
-      priority = 0;
+    // if (delta == 0)
+    //   priority = std::numeric_limits<uint32_t>::max();
+    // else
+    priority = 0;
     DGTerminatorDetector dga;
     DGAccumulatorTy work_edges;
     DGAccumulatorTy BadWork;
@@ -247,13 +249,14 @@ struct SSSP {
     do {
 
       // if (work_edges.reduce() == 0)
-      priority += delta;
+      priority += (1 << delta);
 
       syncSubstrate->set_num_round(_num_iterations);
       dga.reset();
       BadWork.reset();
       WLEmptyWork.reset();
       work_edges.reset();
+      galois::InsertBag<UpdateRequest> nextBag;
       if (personality == GPU_CUDA) {
 #ifdef GALOIS_ENABLE_GPU
         std::string impl_str("SSSP_" + (syncSubstrate->get_run_identifier()));
@@ -271,15 +274,15 @@ struct SSSP {
       } else if (personality == CPU) {
         galois::for_each(
             galois::iterate(initBag),
-            SSSP{priority, &_graph, ReqPushWrap(), dga, work_edges, BadWork,
-                 WLEmptyWork},
+            SSSP{priority, &_graph, nextBag, ReqPushWrap(), dga, work_edges,
+                 BadWork, WLEmptyWork},
             galois::no_stats(), galois::wl<OBIM>(UpdateRequestIndexer{delta}),
             galois::disable_conflict_detection(),
             galois::loopname(
                 syncSubstrate->get_run_identifier("SSSP").c_str()));
       }
 
-      initBag.clear();
+      std::swap(initBag, nextBag);
 
       syncSubstrate->sync<writeDestination, readSource, Reduce_min_dist_current,
                           Bitset_dist_current, async>("SSSP");
@@ -317,7 +320,10 @@ struct SSSP {
     if (snode.dist_old > snode.dist_current) {
       active_vertices += 1;
 
-      // if (local_priority > snode.dist_current) {
+      if (local_priority < snode.dist_current) {
+        pushWrap(nextBag, item.src, snode.dist_current);
+        return;
+      }
       snode.dist_old = snode.dist_current;
 
       for (auto jj : graph->edges(item.src)) {
@@ -337,7 +343,6 @@ struct SSSP {
           pushWrap(ctx, dst, new_dist);
         }
       }
-      // }
     }
   }
 };
