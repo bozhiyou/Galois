@@ -84,6 +84,7 @@ typedef typename Graph::GraphNode GNode;
 
 std::unique_ptr<galois::graphs::GluonSubstrate<Graph>> syncSubstrate;
 
+constexpr static const bool TRACK_WORK     = false;
 constexpr static const unsigned CHUNK_SIZE = 64U;
 
 using Internal      = BFS_SSSP<Graph, uint32_t, true>; //, EDGE_TILE_SIZE>;
@@ -215,11 +216,15 @@ struct SSSP {
 
   DGTerminatorDetector& active_vertices;
   DGAccumulatorTy& work_edges;
+  DGAccumulatorTy& BadWork;
+  DGAccumulatorTy& WLEmptyWork;
 
   SSSP(uint32_t _local_priority, Graph* _graph, const ReqPushWrap& _pushWrap,
-       DGTerminatorDetector& _dga, DGAccumulatorTy& _work_edges)
+       DGTerminatorDetector& _dga, DGAccumulatorTy& _work_edges,
+       DGAccumulatorTy& _BadWork, DGAccumulatorTy& _WLEmptyWork)
       : local_priority(_local_priority), graph(_graph), pushWrap(_pushWrap),
-        active_vertices(_dga), work_edges(_work_edges) {}
+        active_vertices(_dga), work_edges(_work_edges), BadWork(_BadWork),
+        WLEmptyWork(_WLEmptyWork) {}
 
   void static go(Graph& _graph, galois::InsertBag<UpdateRequest>& initBag) {
     FirstItr_SSSP<async>::go(_graph, initBag);
@@ -236,6 +241,8 @@ struct SSSP {
       priority = 0;
     DGTerminatorDetector dga;
     DGAccumulatorTy work_edges;
+    DGAccumulatorTy BadWork;
+    DGAccumulatorTy WLEmptyWork;
 
     do {
 
@@ -244,6 +251,8 @@ struct SSSP {
 
       syncSubstrate->set_num_round(_num_iterations);
       dga.reset();
+      BadWork.reset();
+      WLEmptyWork.reset();
       work_edges.reset();
       if (personality == GPU_CUDA) {
 #ifdef GALOIS_ENABLE_GPU
@@ -262,7 +271,8 @@ struct SSSP {
       } else if (personality == CPU) {
         galois::for_each(
             galois::iterate(initBag),
-            SSSP{priority, &_graph, ReqPushWrap(), dga, work_edges},
+            SSSP{priority, &_graph, ReqPushWrap(), dga, work_edges, BadWork,
+                 WLEmptyWork},
             galois::no_stats(), galois::wl<OBIM>(UpdateRequestIndexer{delta}),
             galois::disable_conflict_detection(),
             galois::loopname(
@@ -277,6 +287,14 @@ struct SSSP {
       galois::runtime::reportStat_Tsum(
           "SSSP", "NumWorkItems_" + (syncSubstrate->get_run_identifier()),
           work_edges.read_local());
+      if (TRACK_WORK) {
+        galois::runtime::reportStat_Tsum(
+            "SSSP", "BadWork_" + (syncSubstrate->get_run_identifier()),
+            BadWork.read_local());
+        galois::runtime::reportStat_Tsum(
+            "SSSP", "WLEmptyWork_" + (syncSubstrate->get_run_identifier()),
+            WLEmptyWork.read_local());
+      }
       ++_num_iterations;
     } while ((async || (_num_iterations < maxIterations)) &&
              dga.reduce(syncSubstrate->get_run_identifier()));
@@ -291,6 +309,8 @@ struct SSSP {
     NodeData& snode = graph->getData(item.src);
 
     if (snode.dist_current < item.dist) {
+      if (TRACK_WORK)
+        WLEmptyWork += 1;
       return;
     }
 
@@ -308,6 +328,11 @@ struct SSSP {
         uint32_t new_dist = graph->getEdgeData(jj) + snode.dist_current;
         uint32_t old_dist = galois::atomicMin(dnode.dist_current, new_dist);
         if (old_dist > new_dist) {
+          if (TRACK_WORK) {
+            if (old_dist != infinity) {
+              BadWork += 1;
+            }
+          }
           bitset_dist_current.set(dst);
           pushWrap(ctx, dst, new_dist);
         }
