@@ -58,11 +58,11 @@ static cll::opt<uint32_t>
           cll::desc("Shift value for the delta step (default value 0)"),
           cll::init(0));
 
-static cll::opt<uint32_t> lambda(
-    "lambda",
-    cll::desc(
-        "Priority bins processed between synchronizations (default value 1)"),
-    cll::init(1));
+static cll::opt<uint32_t>
+    lambda("lambda",
+           cll::desc("Priority bins processed between synchronizations "
+                     "(default value 0 for all bins)"),
+           cll::init(0));
 
 enum Exec { Sync, Async };
 
@@ -243,10 +243,10 @@ struct SSSP {
         _graph.allNodesWithEdgesRange();
 
     uint32_t priority;
-    // if (delta == 0)
-    //   priority = std::numeric_limits<uint32_t>::max();
-    // else
-    priority = 0;
+    if (lambda == 0)
+      priority = std::numeric_limits<uint32_t>::max();
+    else
+      priority = 0;
     DGTerminatorDetector dga;
     DGAccumulatorTy work_edges;
     DGAccumulatorTy BadWork;
