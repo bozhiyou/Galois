@@ -53,14 +53,16 @@ enum SourceType { scatter = 0, analytical };
 const char* const ALGO_NAMES[] = {
     "Fast Marching Method", "Fast Iterative Method", "Fast Sweeping Method"};
 
-static llvm::cl::OptionCategory catAlgo("1. Algorithmic Options");
-static llvm::cl::opt<Algo>
-    algo("algo", llvm::cl::value_desc("algo"),
-         llvm::cl::desc("Choose an algorithm (default parallel):"),
-         llvm::cl::values(clEnumVal(fmm, "FastMarchingMethod"),
-                          clEnumVal(fim, "Fast Iterative Method"),
-                          clEnumVal(fsm, "Fast Sweeping Method")),
-         llvm::cl::init(fmm), llvm::cl::cat(catAlgo));
+static llvm::cl::OptionCategory catAlgo{"1. Algorithmic Options"};
+static llvm::cl::opt<Algo> algo{
+    "algo",
+    llvm::cl::value_desc("algo"),
+    llvm::cl::desc("Choose an algorithm (default parallel):"),
+    llvm::cl::values(clEnumVal(fmm, "Fast Marching Method"),
+                     clEnumVal(fim, "Fast Iterative Method"),
+                     clEnumVal(fsm, "Fast Sweeping Method")),
+    llvm::cl::init(fmm),
+    llvm::cl::cat(catAlgo)};
 static llvm::cl::opt<bool> useSerial{
     "serial", llvm::cl::desc("Use serial implementation"),
     llvm::cl::cat(catAlgo)};
@@ -80,33 +82,33 @@ static llvm::cl::opt<bool> strict{
         "Force non-increasing update to mitigate catastrophic cancellation"),
     llvm::cl::cat(catAlgo)};
 
-static llvm::cl::OptionCategory catInput("2. Input Options");
-static llvm::cl::opt<SourceType> source_type(
+static llvm::cl::OptionCategory catInput{"2. Input Options"};
+static llvm::cl::opt<SourceType> source_type{
     "sourceFormat", llvm::cl::desc("Choose an source format:"),
     llvm::cl::values(clEnumVal(scatter, "a set of discretized points"),
                      clEnumVal(analytical, "boundary in a analytical form")),
-    llvm::cl::init(scatter), llvm::cl::cat(catInput));
-static llvm::cl::opt<std::string> input_segy(
+    llvm::cl::init(scatter), llvm::cl::cat(catInput)};
+static llvm::cl::opt<std::string> input_segy{
     "segy", llvm::cl::value_desc("path-to-file"),
     llvm::cl::desc("Use SEG-Y (rev 1) file as input speed map. NOTE: This will "
                    "determine the size on each dimensions"),
-    llvm::cl::init(""), llvm::cl::cat(catInput));
-static llvm::cl::opt<std::string> input_npy(
+    llvm::cl::init(""), llvm::cl::cat(catInput)};
+static llvm::cl::opt<std::string> input_npy{
     "inpy", llvm::cl::value_desc("path-to-file"),
     llvm::cl::desc(
         "Use npy file (dtype=float32) as input speed map. NOTE: This will "
         "determine the size on each dimensions"),
-    llvm::cl::init(""), llvm::cl::cat(catInput));
-static llvm::cl::opt<std::string> input_csv(
+    llvm::cl::init(""), llvm::cl::cat(catInput)};
+static llvm::cl::opt<std::string> input_csv{
     "icsv", llvm::cl::value_desc("path-to-file"),
     llvm::cl::desc(
         "Use csv file as input speed map. NOTE: Current implementation "
         "requires explicit definition of the size on each dimensions"),
-    llvm::cl::init(""), llvm::cl::cat(catInput));
-static llvm::cl::opt<std::string> verify_npy(
+    llvm::cl::init(""), llvm::cl::cat(catInput)};
+static llvm::cl::opt<std::string> verify_npy{
     "vnpy",
     llvm::cl::desc("Canonical results for verification in a npy format file"),
-    llvm::cl::init(""), llvm::cl::cat(catInput));
+    llvm::cl::init(""), llvm::cl::cat(catInput)};
 namespace internal {
 template <typename T>
 struct StrConv;
@@ -153,43 +155,44 @@ struct NumVecParser : public llvm::cl::parser<std::vector<NumTy>> {
 };
 static llvm::cl::opt<std::vector<std::size_t>, false,
                      NumVecParser<std::size_t, DIM_LIMIT>>
-    domain_shape(
+    domain_shape{
         "ij", llvm::cl::value_desc("nrows,ncols"),
         llvm::cl::desc("Size of each dimensions as a comma-separated array "
                        "(support up to 2-D)"),
-        llvm::cl::cat(catInput));
+        llvm::cl::cat(catInput)};
 static llvm::cl::opt<double> speed_factor{
     "sf", llvm::cl::desc("speed factor multiplied to speed value"),
     llvm::cl::init(1.), llvm::cl::cat(catInput)};
 
-static llvm::cl::OptionCategory catOutput("3. Output Options");
-static llvm::cl::opt<std::string>
-    output_csv("ocsv", llvm::cl::desc("Export results to a csv format file"),
-               llvm::cl::init(""), llvm::cl::cat(catOutput));
-static llvm::cl::opt<std::string>
-    output_npy("onpy", llvm::cl::desc("Export results to a npy format file"),
-               llvm::cl::init(""), llvm::cl::cat(catOutput));
+static llvm::cl::OptionCategory catOutput{"3. Output Options"};
+static llvm::cl::opt<std::string> output_csv{
+    "ocsv", llvm::cl::desc("Export results to a csv format file"),
+    llvm::cl::init(""), llvm::cl::cat(catOutput)};
+static llvm::cl::opt<std::string> output_npy{
+    "onpy", llvm::cl::desc("Export results to a npy format file"),
+    llvm::cl::init(""), llvm::cl::cat(catOutput)};
 
-static llvm::cl::OptionCategory catDisc("4. Discretization options");
+static llvm::cl::OptionCategory catDisc{"4. Discretization options"};
 static llvm::cl::opt<std::vector<double>, false,
                      NumVecParser<double, DIM_LIMIT>>
-    steps("h", llvm::cl::value_desc("dx,dy"),
+    steps{"h", llvm::cl::value_desc("dx,dy"),
           llvm::cl::desc("Spacing between discrete samples of each dimensions; "
                          "type as a comma-separated pair"),
-          llvm::cl::init(std::vector<double>{1., 1.}), llvm::cl::cat(catDisc));
+          llvm::cl::init(std::vector<double>{1., 1.}), llvm::cl::cat(catDisc)};
 static llvm::cl::opt<std::vector<double>, false,
                      NumVecParser<double, DIM_LIMIT>>
-    domain_start("oxy", llvm::cl::value_desc("x0,y0"),
+    domain_start{"oxy", llvm::cl::value_desc("x0,y0"),
                  llvm::cl::desc("Coordinate of cell [0, 0] "
                                 "<comma-separated array, default (0., 0.)>"),
                  llvm::cl::init(std::vector<double>{0., 0.}),
-                 llvm::cl::cat(catDisc));
+                 llvm::cl::cat(catDisc)};
 
 static std::size_t nx, ny, NUM_CELLS;
 static data_t dx, dy, xa, xb, ya, yb;
 
 constexpr galois::MethodFlag UNPROTECTED = galois::MethodFlag::UNPROTECTED;
 
+// TODO: still necessary?
 static_assert(sizeof(std::atomic<std::size_t>) <= sizeof(double),
               "Current buffer allocation code assumes atomic "
               "counters smaller than sizeof(double).");
